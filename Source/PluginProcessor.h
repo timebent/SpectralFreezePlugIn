@@ -4,6 +4,8 @@
 #include "Gamma/DFT.h"
 #include "Gamma/Oscillator.h"
 #include "Gamma/SamplePlayer.h"
+#include "Gamma/Delay.h"
+#include "Gamma/Gamma.h"
 
 //==============================================================================
 class AudioPluginAudioProcessor  : public juce::AudioProcessor
@@ -48,17 +50,29 @@ public:
 private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
+    float * phases;
+    gam::Comb<> delay;
     gam::Sine<> osc;
     gam::SamplePlayer<> player;
     gam::Accum<> timer{1./2.};
     int captureCount = 0;
     gam::STFT stft{
 		65536,		// Window size
-		65536/4,		// Hop size; number of samples between transforms
+		65536,		// Hop size; number of samples between transforms
 		0,			// Pad size; number of zero-valued samples appended to window
 		gam::HANN,		// Window type: BARTLETT, BLACKMAN, BLACKMAN_HARRIS,
 					//		HAMMING, HANN, WELCH, NYQUIST, or RECTANGLE
-		gam::COMPLEX		// Format of frequency samples:
+		gam::MAG_PHASE		// Format of frequency samples:
+					//		COMPLEX, MAG_PHASE, or MAG_FREQ
+	};
+
+     gam::STFT prevstft{
+		65536,		// Window size
+		65536,		// Hop size; number of samples between transforms
+		0,			// Pad size; number of zero-valued samples appended to window
+		gam::HANN,		// Window type: BARTLETT, BLACKMAN, BLACKMAN_HARRIS,
+					//		HAMMING, HANN, WELCH, NYQUIST, or RECTANGLE
+		gam::MAG_PHASE		// Format of frequency samples:
 					//		COMPLEX, MAG_PHASE, or MAG_FREQ
 	};
 };

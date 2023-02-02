@@ -93,6 +93,9 @@ void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
     gam::Domain::master().spu(sampleRate);
     // osc.domain(domain);
     player.load("/Users/jthompson/Desktop/sf/Mix_option_3.aif");
+    delay.maxDelay(2.0f);
+    delay.delaySamples(65384);
+    delay.fbk(0.99);
 }
 
 void AudioPluginAudioProcessor::releaseResources()
@@ -155,54 +158,18 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         player.rate(1);
         float sample = player();
 
-			// Input next sample for analysis
-			// When this returns true, then we have a new spectral frame
-			// if(stft(sample)){
-			
-			// 	// Loop through all the bins
-			// 	for(unsigned k=0; k<stft.numBins(); ++k){
-			// 		// Here we simply scale the complex sample
-				
-            //         if(stft.bin(k).real() < 0.005) {
-            //             	stft.bin(k) *= 0.0;
-            //         }
-            //         //     std::cout << k << std::endl;
-            //         // }
-            //         // if(k > 17)
-            //         // stft.bin(k-5) = stft.bin(k);
-			// 	}
-			// }
-
-            if(timer()){
-				captureCount=0;
-			}
-
-			// Capture 4 hops to make up the size of one window
-			if(captureCount<4 && stft(sample)){
-				captureCount++;
-			}
-		
-			// Get next resynthesized sample
-			sample = stft();
+      
+        if(stft(sample)) {
+          for(int k=0; k<stft.numBins(); ++k) {
+                    stft.bin(k) = (stft.bin(k)*0.5) + (prevstft.bin(k) * 0.5);
+                    stft.bin(k)[1] = gam::rnd::uni(M_2PI);
+                    prevstft.bin(k) = stft.bin(k);
+                }
+        }
+                       
+            sample = stft();
             b[i] = sample;
     }
-     
-
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    //  for (int channel = 0; channel < totalNumInputChannels; ++channel)
-    // {
-    //      auto* channelData = buffer.getWritePointer (0);
-    //      juce::ignoreUnused (channelData);
-   
-    // for (int i = 0; i<buffer.getNumSamples(); i++) {
-    //     channelData[i] = osc();
-    // }
-    // }
 }
 
 //==============================================================================
