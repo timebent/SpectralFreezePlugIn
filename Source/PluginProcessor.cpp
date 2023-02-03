@@ -12,6 +12,10 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
                      #endif
                        )
 {
+    // always be suspicious of the use of 'new' in modern C++. Here it is ok because juce::AudioProcessor now owns the pointer, and will be responsible for deleting when done
+    addParameter (feedbackAmmount = new juce::AudioParameterFloat ("feedbackAmountParmaseanID", "Feedback Amount", 0.0f, 0.99999f, 0.999f));
+    addParameter (feedbackTimeMS  = new juce::AudioParameterFloat ("feedbackTimeParmaseanID", "Feedback Time (MS)", 5.0f, 1000.0f, 100.0f));
+
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
@@ -86,16 +90,21 @@ void AudioPluginAudioProcessor::changeProgramName (int index, const juce::String
 //==============================================================================
 void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    // storing sample rate to set delay by MS in process block
+    this->sampleRate = sampleRate; // using "this->" to avoid coming up with a different name for these
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
     juce::ignoreUnused (sampleRate, samplesPerBlock);
    //  gam::Domain domain = gam::Domain::master();
     gam::Domain::master().spu(sampleRate);
     // osc.domain(domain);
-    player.load("/Users/jthompson/Desktop/sf/Mix_option_3.aif");
+    //player.load("/Users/jthompson/Desktop/sf/Mix_option_3.aif");
+    player.load("C:/Users/Anderson/Downloads/Steely Dan - Do It Again.wav");
     delay.maxDelay(2.0f);
-    delay.delaySamples(65384);
-    delay.fbk(0.99);
+    
+    //these are now set at the beginning of the process block, controlled by either default param values or slider changes
+//    delay.delaySamples(sampleRate * 0.1);
+//    delay.fbk(0.99);
 }
 
 void AudioPluginAudioProcessor::releaseResources()
@@ -134,6 +143,9 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     juce::ignoreUnused (midiMessages);
     osc.freq(440);
 
+    // setting here is once-per-block  ((Setting them like this is technically illegal b/c it's not thread-safe! I've seen this in production code though, just not good production code))
+    delay.delaySamples ((*feedbackTimeMS) * 0.001f * sampleRate);
+    delay.fbk (*feedbackAmmount);
 
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
@@ -157,18 +169,20 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         float s = osc() * 0.1f;
         player.rate(1);
         float sample = player();
-
+        sample = delay (sample);
       
-        if(stft(sample)) {
-          for(int k=0; k<stft.numBins(); ++k) {
-                    stft.bin(k) = (stft.bin(k)*0.5) + (prevstft.bin(k) * 0.5);
-                    stft.bin(k)[1] = gam::rnd::uni(M_2PI);
-                    prevstft.bin(k) = stft.bin(k);
-                }
+        if(stft(sample)) 
+        {
+            for(int k=0; k<stft.numBins(); ++k) 
+            {
+                stft.bin(k) = (stft.bin(k)*0.5) + (prevstft.bin(k) * 0.5);
+                stft.bin(k)[1] = gam::rnd::uni(M_2PI);
+                prevstft.bin(k) = stft.bin(k);
+            }
         }
-                       
-            sample = stft();
-            b[i] = sample;
+           
+        sample = stft();
+        b[i] = sample;
     }
 }
 

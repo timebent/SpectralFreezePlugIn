@@ -47,10 +47,14 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    juce::AudioParameterFloat* feedbackAmmount;
+    juce::AudioParameterFloat* feedbackTimeMS;
+
 private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
     float * phases;
+    double sampleRate; // keeping a copy for convenience (wow! such luxury!)
     gam::Comb<> delay;
     gam::Sine<> osc;
     gam::SamplePlayer<> player;
@@ -58,7 +62,7 @@ private:
     int captureCount = 0;
     gam::STFT stft{
 		65536,		// Window size
-		65536,		// Hop size; number of samples between transforms
+		65536 / 4,		// Hop size; number of samples between transforms
 		0,			// Pad size; number of zero-valued samples appended to window
 		gam::HANN,		// Window type: BARTLETT, BLACKMAN, BLACKMAN_HARRIS,
 					//		HAMMING, HANN, WELCH, NYQUIST, or RECTANGLE
@@ -68,7 +72,7 @@ private:
 
      gam::STFT prevstft{
 		65536,		// Window size
-		65536,		// Hop size; number of samples between transforms
+		65536 / 4,		// Hop size; number of samples between transforms
 		0,			// Pad size; number of zero-valued samples appended to window
 		gam::HANN,		// Window type: BARTLETT, BLACKMAN, BLACKMAN_HARRIS,
 					//		HAMMING, HANN, WELCH, NYQUIST, or RECTANGLE

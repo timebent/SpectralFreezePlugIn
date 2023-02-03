@@ -8,6 +8,28 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     juce::ignoreUnused (processorRef);
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
+
+
+    feedbackAmountSlider.setRange (0.0, 0.99999);
+    feedbackAmountSlider.setSkewFactorFromMidPoint ( 0.95);
+    feedbackAmountSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 20);
+    feedbackAmountSlider.onValueChange = [&]() 
+    {   //awkward to convert 0 -> 0.99999 to 0.0 -> 1.0, but we must
+        auto normalized = processorRef.feedbackAmmount->convertTo0to1 (feedbackAmountSlider.getValue());
+        processorRef.feedbackAmmount->setValueNotifyingHost (normalized);
+    };
+    addAndMakeVisible (&feedbackAmountSlider);
+
+    feedbackTimeSlider.setRange (5.0, 1000.0);
+    feedbackTimeSlider.setSkewFactorFromMidPoint (125.0);
+    feedbackAmountSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 20);
+    feedbackTimeSlider.onValueChange = [&]()
+    {
+        auto normalized = processorRef.feedbackTimeMS->convertTo0to1 (feedbackTimeSlider.getValue());
+        processorRef.feedbackTimeMS->setValueNotifyingHost (normalized);
+    };
+    addAndMakeVisible (&feedbackTimeSlider);
+
     setSize (400, 300);
 }
 
@@ -28,6 +50,9 @@ void AudioPluginAudioProcessorEditor::paint (juce::Graphics& g)
 
 void AudioPluginAudioProcessorEditor::resized()
 {
-    // This is generally where you'll want to lay out the positions of any
-    // subcomponents in your editor..
+    auto b = getLocalBounds(); int gap = 4;
+    feedbackAmountSlider.setBounds (b.removeFromTop (40));
+    b.removeFromTop (gap);
+    feedbackTimeSlider.setBounds   (b.removeFromTop (40)); 
+    b.removeFromTop (gap);
 }
