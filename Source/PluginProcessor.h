@@ -7,6 +7,43 @@
 #include "Gamma/Delay.h"
 #include "Gamma/Gamma.h"
 
+class CPUMeter
+{
+public:
+    void prepare (double sr, int size)
+    {
+        sampleRate = sr;
+        bufferSize = size;
+        loadMeasurer.reset (sampleRate, bufferSize);
+    }
+    void reset () { loadMeasurer.reset (sampleRate, bufferSize); }
+    // only to be used in the process call-back
+    juce::AudioProcessLoadMeasurer& getLoadMeasurer () { return loadMeasurer; }
+    int getXRunCount() { return loadMeasurer.getXRunCount(); }
+    float getCPULoad () { return cpuRead.getNext (loadMeasurer.getLoadAsPercentage()); }
+private:
+    juce::AudioProcessLoadMeasurer loadMeasurer;
+    double sampleRate; int bufferSize;
+
+    struct SmoothFall
+    {
+        float getNext (float newValue)
+        {
+            if (newValue > fallingValue)
+                fallingValue = newValue;
+            else
+                fallingValue *= scalar;
+
+            return fallingValue;
+        }
+    private:
+        float fallingValue = 0.0f;
+        float scalar = 0.99f;
+    };
+    SmoothFall cpuRead;
+};
+
+
 //==============================================================================
 class AudioPluginAudioProcessor  : public juce::AudioProcessor
 {
@@ -50,33 +87,40 @@ public:
     juce::AudioParameterFloat* feedbackAmmount;
     juce::AudioParameterFloat* feedbackTimeMS;
 
+    CPUMeter cpuMeter;
+    bool doSpectralStuff = true;
+    bool randomizePhase  = true;
+    juce::Range<int> keeperBins;
+    static const int fftSize = 2048;
+
 private:
-    //==============================================================================
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
     float * phases;
     double sampleRate; // keeping a copy for convenience (wow! such luxury!)
     gam::Comb<> delay;
-    gam::Sine<> osc;
+    // gam::Sine<> osc;
+    gam::Square<> osc;
     gam::SamplePlayer<> player;
     gam::Accum<> timer{1./2.};
     int captureCount = 0;
     gam::STFT stft{
-		65536,		// Window size
-		65536 / 4,		// Hop size; number of samples between transforms
+		2048,		// Window size
+		2048 / 4,		// Hop size; number of samples between transforms
 		0,			// Pad size; number of zero-valued samples appended to window
 		gam::HANN,		// Window type: BARTLETT, BLACKMAN, BLACKMAN_HARRIS,
 					//		HAMMING, HANN, WELCH, NYQUIST, or RECTANGLE
-		gam::MAG_PHASE		// Format of frequency samples:
+		gam::COMPLEX		// Format of frequency samples:
 					//		COMPLEX, MAG_PHASE, or MAG_FREQ
 	};
+    juce::Array<gam::Complex<float>> history;
 
-     gam::STFT prevstft{
-		65536,		// Window size
-		65536 / 4,		// Hop size; number of samples between transforms
-		0,			// Pad size; number of zero-valued samples appended to window
-		gam::HANN,		// Window type: BARTLETT, BLACKMAN, BLACKMAN_HARRIS,
-					//		HAMMING, HANN, WELCH, NYQUIST, or RECTANGLE
-		gam::MAG_PHASE		// Format of frequency samples:
-					//		COMPLEX, MAG_PHASE, or MAG_FREQ
-	};
+    //  gam::STFT prevstft{
+	// 	2048,		// Window size
+	// 	2048 / 4,		// Hop size; number of samples between transforms
+	// 	0,			// Pad size; number of zero-valued samples appended to window
+	// 	gam::HANN,		// Window type: BARTLETT, BLACKMAN, BLACKMAN_HARRIS,
+	// 				//		HAMMING, HANN, WELCH, NYQUIST, or RECTANGLE
+	// 	gam::COMPLEX		// Format of frequency samples:
+	// 				//		COMPLEX, MAG_PHASE, or MAG_FREQ
+	// };
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
 };

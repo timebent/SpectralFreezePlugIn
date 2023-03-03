@@ -102,6 +102,10 @@ void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
     player.load("C:/Users/Anderson/Downloads/Steely Dan - Do It Again.wav");
     delay.maxDelay(2.0f);
     
+    history.resize (fftSize);
+    history.clear();
+
+    cpuMeter.prepare (sampleRate, samplesPerBlock);
     //these are now set at the beginning of the process block, controlled by either default param values or slider changes
 //    delay.delaySamples(sampleRate * 0.1);
 //    delay.fbk(0.99);
@@ -141,7 +145,8 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                               juce::MidiBuffer& midiMessages)
 {
     juce::ignoreUnused (midiMessages);
-    osc.freq(440);
+    juce::AudioProcessLoadMeasurer::ScopedTimer m(cpuMeter.getLoadMeasurer()); 
+    osc.freq(400);
 
     // setting here is once-per-block  ((Setting them like this is technically illegal b/c it's not thread-safe! I've seen this in production code though, just not good production code))
     delay.delaySamples ((*feedbackTimeMS) * 0.001f * sampleRate);
@@ -151,12 +156,6 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
@@ -169,17 +168,62 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         float s = osc() * 0.1f;
         player.rate(1);
         float sample = player();
-        sample = delay (sample);
+        //sample = delay (sample);
+        //sample = osc() * 0.1f;
       
+
+        if (!doSpectralStuff) // if bypassing spectral
+        {
+            b[i] = sample; 
+            continue; // skip the rest and go to next i;
+        }
+
+        // if(stft(sample)) 
+        // {
+        //     for(int k=0; k<stft.numBins(); ++k) 
+        //     {
+        //         stft.bin(k) = (stft.bin(k)*0.5) + (prevstft.bin(k) * 0.5);
+        //         stft.bin(k)[1] = gam::rnd::uni(M_2PI);
+        //         prevstft.bin(k) = stft.bin(k);
+        //     }
+        // }
+
         if(stft(sample)) 
         {
             for(int k=0; k<stft.numBins(); ++k) 
             {
-                stft.bin(k) = (stft.bin(k)*0.5) + (prevstft.bin(k) * 0.5);
-                stft.bin(k)[1] = gam::rnd::uni(M_2PI);
-                prevstft.bin(k) = stft.bin(k);
+
+                if (!keeperBins.contains (k))
+                    stft.bin (k).mag (0.0f);
+                
+                if (randomizePhase)
+                    stft.bin(k).arg (gam::rnd::uni(M_2PI));
+
+
+                // so far this is just an expensive way to do nothing. 
+                // The idea is to have a recursive feedback loop on fft frames
+                // Things aren't working quite like I expect. 
+                // in time domain audio, you just 
+                // currentSample = historySample + currentSample;
+                // historySample += currentSample;
+                // 
+                auto tempCurrentBin = stft.bin (k);
+                auto tempHistoryBin = history[k];
+                stft.bin(k) = (tempHistoryBin.mag ((1.0f - (*feedbackAmmount)) * tempHistoryBin.mag())) + 
+                              (tempCurrentBin.mag (        (*feedbackAmmount)  * tempCurrentBin.mag()));
+                history[k] += stft.bin(k);
+
+                //history[k] += tempCurrentBin.mag (*feedbackAmmount * tempCurrentBin (k).mag() * 10.0f);
+                //stft.bin (k).mag (*feedbackAmmount * stft.bin (k).mag() * 10.0f);
+                //prevstft.bin(k) = stft.bin(k);
             }
         }
+        // if (stft (sample))
+        //     for (auto bin : stft)
+        //         if (bin.mag() > 0.5f)
+        //             bin.mag (0.0f);
+    
+        
            
         sample = stft();
         b[i] = sample;
